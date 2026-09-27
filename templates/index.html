@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - AI Quotation System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-gear-wide-connected me-2 fs-4"></i>
+                <span class="fw-bold">{{ title }}</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-white me-3 d-none d-md-inline">
+                    <i class="bi bi-calendar3 me-1"></i>{{ current_date }}
+                </span>
+                <a href="/history" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-clock-history me-1"></i>Quotations
+                </a>
+                <a href="/logout" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero-section text-center py-3">
+        <h2 class="text-white mb-1">{{ subtitle }}</h2>
+        <p class="text-white-50 mb-0 small">Upload a motor nameplate image to generate a professional rewinding quotation</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container-fluid px-4 mt-4">
+        <div class="row g-4">
+            <!-- LEFT PANEL - Upload -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-bottom">
+                        <h5 class="mb-0"><i class="bi bi-upload me-2 text-primary"></i>Upload Motor Nameplate</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Upload Area -->
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                            </div>
+                            <p class="mb-1 fw-semibold">Drag & Drop or Click</p>
+                            <p class="text-muted small mb-2">JPG, JPEG, PNG (Max 20MB)</p>
+                            <input type="file" id="fileInput" accept=".jpg,.jpeg,.png" class="d-none">
+                            <button class="btn btn-primary btn-sm" onclick="document.getElementById('fileInput').click()">
+                                <i class="bi bi-folder2-open me-1"></i>Browse
+                            </button>
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div id="imagePreview" class="mt-3 d-none">
+                            <div class="preview-container">
+                                <img id="previewImg" src="" alt="Preview" class="img-fluid rounded">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="badge bg-success" id="fileInfo"></span>
+                                <button class="btn btn-outline-danger btn-sm" onclick="clearUpload()">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Upload Button -->
+                        <button class="btn btn-primary w-100 mt-3" id="uploadBtn" disabled onclick="uploadAndAnalyze()">
+                            <i class="bi bi-cpu me-2"></i>Upload & Create Inventory
+                        </button>
+
+                        <!-- Progress -->
+                        <div id="progressSection" class="mt-3 d-none">
+                            <div class="progress" style="height: 5px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="progressBar" style="width: 0%"></div>
+                            </div>
+                            <p class="text-center small text-muted mt-1 mb-0" id="progressText">Processing...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Panel (Clean modern style) -->
+                <div class="card border-0 shadow-sm mt-3 d-none" id="analysisPanel">
+                    <div class="card-body py-3 px-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="analysis-icon-pulse me-2">
+                                <i class="bi bi-cpu"></i>
+                            </div>
+                            <small class="fw-bold text-primary">AI Analysis</small>
+                            <span class="ms-auto badge bg-success d-none" id="analysisStatusBadge">
+                                <i class="bi bi-check-circle me-1"></i>Complete
+                            </span>
+                        </div>
+                        <div class="analysis-steps" id="analysisTerminal"></div>
+                    </div>
+                </div>
+
+                <!-- Stats Cards + Live Tech (combined) -->
+                <div class="row g-3 mt-3">
+                    <div class="col-6">
+                        <div class="card border-0 shadow-sm stat-card">
+                            <div class="card-body text-center py-3">
+                                <i class="bi bi-box-seam text-primary fs-4"></i>
+                                <h4 class="mb-0 mt-1" id="totalInventory">0</h4>
+                                <small class="text-muted">Total Inventory</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card border-0 shadow-sm stat-card">
+                            <div class="card-body text-center py-3">
+                                <i class="bi bi-file-earmark-pdf text-success fs-4"></i>
+                                <h4 class="mb-0 mt-1" id="totalQuotations">0</h4>
+                                <small class="text-muted">Quotations</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL - Inventory Table -->
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-table me-2 text-primary"></i>Inventory Records</h5>
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control form-control-sm" id="searchInput"
+                                   placeholder="Search..." style="width: 200px;" oninput="filterInventory()">
+                            <button class="btn btn-outline-primary btn-sm" onclick="loadInventory()" title="Refresh">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <!-- Loading -->
+                        <div id="tableLoading" class="text-center py-5">
+                            <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                            <p class="mt-2 text-muted small mb-0">Loading inventory...</p>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div id="tableEmpty" class="text-center py-5 d-none">
+                            <i class="bi bi-inbox display-4 text-muted"></i>
+                            <p class="mt-2 text-muted">No inventory records yet</p>
+                            <p class="text-muted small">Upload a motor nameplate to create your first entry</p>
+                        </div>
+
+                        <!-- Inventory Table -->
+                        <div class="table-responsive" id="inventoryTableWrapper" style="display:none;">
+                            <table class="table table-hover mb-0 inventory-table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-3">
+                                            <i class="bi bi-hash me-1"></i>Inventory ID
+                                        </th>
+                                        <th><i class="bi bi-image me-1"></i>Image</th>
+                                        <th><i class="bi bi-building me-1"></i>Manufacturer</th>
+                                        <th><i class="bi bi-lightning me-1"></i>Power</th>
+                                        <th><i class="bi bi-speedometer me-1"></i>RPM</th>
+                                        <th class="text-center"><i class="bi bi-flag me-1"></i>Status</th>
+                                        <th><i class="bi bi-calendar me-1"></i>Date</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventoryBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Market Ticker + Insights (below inventory table) -->
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="card-body p-0" style="border-radius:12px; overflow:hidden;">
+                        <!-- Animated tech panel (no photos, pure theme-matched design) -->
+                        <div class="live-panel">
+                            <div class="live-panel-bg"></div>
+                            <div class="live-panel-content">
+                                <div class="live-panel-left">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="live-dot"></span>
+                                        <span class="live-label">INDUSTRY PULSE</span>
+                                    </div>
+                                    <div class="tech-icon-mini" id="techIconMini"><i class="bi bi-lightning-charge-fill"></i></div>
+                                    <div class="tech-title-mini" id="techTitleMini">Vacuum Pressure Impregnation</div>
+                                    <div class="tech-desc-mini" id="techDescMini">Modern VPI ensures complete resin penetration for superior insulation life and thermal performance.</div>
+                                </div>
+                                <div class="live-panel-right">
+                                    <div class="insight-line visible" id="insightLine1"></div>
+                                    <div class="insight-line" id="insightLine2"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Ticker bar -->
+                        <div class="showcase-ticker-inline">
+                            <div class="ticker-content" id="tickerContent">
+                                <span class="ticker-item"><i class="bi bi-graph-up-arrow"></i> Copper (SWG 12): ₹920/kg</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-graph-up-arrow"></i> Copper (SWG 14): ₹950/kg</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-graph-up-arrow"></i> Copper (SWG 16): ₹980/kg</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-box-seam"></i> Nomex Paper: ₹3,200/roll</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-droplet"></i> Varnish (Class F): ₹450/L</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-gear"></i> Bearing 6312-2RS: ₹1,850</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-tools"></i> Skilled Labour: ₹650/hr</span>
+                                <span class="ticker-sep">•</span>
+                                <span class="ticker-item"><i class="bi bi-thermometer-half"></i> Transformer Oil: ₹180/L</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* Live Panel - seamlessly integrated with app purple theme */
+    .live-panel {
+        position: relative;
+        padding: 20px 24px;
+        min-height: 130px;
+        overflow: hidden;
+    }
+    .live-panel-bg {
+        position: absolute; inset: 0;
+        background: linear-gradient(135deg, rgba(26,35,126,0.25) 0%, rgba(57,73,171,0.12) 50%, rgba(26,26,62,0.15) 100%);
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .live-panel-bg::before {
+        content: '';
+        position: absolute; inset: 0;
+        background:
+            radial-gradient(circle at 10% 50%, rgba(124,157,255,0.05) 0%, transparent 40%),
+            radial-gradient(circle at 90% 30%, rgba(57,73,171,0.06) 0%, transparent 35%);
+        animation: panelGlow 8s ease-in-out infinite alternate;
+    }
+    @keyframes panelGlow { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+
+    .live-panel-content {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+    }
+    .live-panel-left { flex: 1; max-width: 380px; }
+    .live-panel-right { flex: 1; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #81c784; animation: pulse 1.5s infinite; display: inline-block; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .live-label { font-size: 0.6rem; font-weight: 700; letter-spacing: 2px; color: #81c784; text-transform: uppercase; }
+
+    .tech-icon-mini { font-size: 1.2rem; color: #7c9dff; margin-bottom: 5px; }
+    .tech-title-mini { font-size: 0.85rem; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+    .tech-desc-mini { font-size: 0.72rem; color: #999; line-height: 1.6; }
+
+    .insight-line {
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-size: 0.72rem; color: #b8c0d4; line-height: 1.5;
+        min-height: 18px;
+        border-right: 2px solid rgba(124,157,255,0.25);
+        padding-right: 10px; text-align: right;
+        opacity: 0; transform: translateY(4px);
+        transition: opacity 0.5s, transform 0.5s;
+    }
+    .insight-line.visible { opacity: 1; transform: translateY(0); }
+
+    .showcase-ticker-inline {
+        background: rgba(15,12,41,0.4);
+        padding: 7px 0; overflow: hidden;
+        border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .ticker-content { display: flex; white-space: nowrap; animation: tickerScroll 35s linear infinite; }
+    .ticker-item { font-size: 0.67rem; color: #81c784; font-weight: 500; padding: 0 10px; }
+    .ticker-item i { color: #7c9dff; margin-right: 3px; }
+    .ticker-sep { color: rgba(255,255,255,0.08); padding: 0 3px; }
+    @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    </style>
+
+
+    <script>
+    (function() {
+        // Tech cards rotation
+        const techCards = [
+            { icon: 'bi-lightning-charge-fill', title: 'Vacuum Pressure Impregnation', desc: 'Modern VPI ensures complete resin penetration for superior insulation life.' },
+            { icon: 'bi-cpu', title: 'CNC Coil Winding', desc: 'Computer-controlled winding achieves exact turn counts and uniform tension.' },
+            { icon: 'bi-thermometer-half', title: 'Class F/H Insulation', desc: 'Nomex 410 & Kapton rated 155-180°C for demanding industrial environments.' },
+            { icon: 'bi-shield-check', title: 'Surge Comparison Testing', desc: 'Detects inter-turn shorts with 99.5% accuracy before energization.' },
+            { icon: 'bi-droplet-fill', title: 'Oil Bath Cooling', desc: 'Oil-immersed cooling reduces hot-spot temp by 25°C, extending life.' },
+            { icon: 'bi-gear-wide-connected', title: 'Dynamic Balancing', desc: 'ISO G2.5 rotor balancing eliminates vibration, protecting bearings.' },
+        ];
+        let techIdx = 0;
+        function cycleTech() {
+            const t = techCards[techIdx % techCards.length]; techIdx++;
+            const icon = document.getElementById('techIconMini');
+            const title = document.getElementById('techTitleMini');
+            const desc = document.getElementById('techDescMini');
+            if(icon) icon.innerHTML = '<i class="bi ' + t.icon + '"></i>';
+            if(title) title.textContent = t.title;
+            if(desc) desc.textContent = t.desc;
+        }
+        setTimeout(cycleTech, 2000);
+        setInterval(cycleTech, 8000);
+
+        // Live insights (below inventory table)
+        const insights = [
+            "⚡ Enamelled copper wire costs have risen 12% this quarter",
+            "🔧 Class H insulation extends motor life by 40% vs Class B",
+            "📊 Average 50HP rewinding cost: ₹45,000 – ₹65,000",
+            "🏭 VPI reduces moisture absorption by 95% in tropical climates",
+            "💡 SWG 12 copper wire: optimal for 30-75 HP motors at 415V",
+            "🌡️ Nomex coils survive 20,000+ start-stop thermal cycles",
+            "📈 India motor rewinding market: ₹8,500 Cr by 2028",
+            "⚙️ CNC winding reduces inter-turn shorts by 85%",
+            "🔬 Megger test at 1000V DC mandatory for motors >10 HP",
+            "💰 Copper in 100HP stator: 45-65 Kg depending on poles",
+            "🏗️ Kirloskar & ABB dominate 62% of rewinding jobs in MH",
+            "📐 Slot fill factor >75% = premium-grade workmanship",
+        ];
+        let insIdx = 0;
+        function typeText(el, text, cb) {
+            el.textContent = ''; el.classList.add('visible');
+            let i = 0;
+            const iv = setInterval(() => { el.textContent = text.substring(0, ++i); if(i >= text.length){ clearInterval(iv); if(cb) setTimeout(cb, 200); } }, 20);
+        }
+        function cycleInsights() {
+            const l1 = document.getElementById('insightLine1');
+            const l2 = document.getElementById('insightLine2');
+            if(!l1 || !l2) return;
+            [l1,l2].forEach(l => l.classList.remove('visible'));
+            setTimeout(() => {
+                typeText(l1, insights[insIdx % insights.length], () => {
+                    typeText(l2, insights[(insIdx+1) % insights.length]);
+                });
+                insIdx += 2;
+            }, 400);
+        }
+        setTimeout(cycleInsights, 1000);
+        setInterval(cycleInsights, 7000);
+
+        // Duplicate ticker for seamless loop
+        const ticker = document.getElementById('tickerContent');
+        if(ticker) ticker.innerHTML += ticker.innerHTML;
+    })();
+    </script>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toastNotification" class="toast" role="alert">
+            <div class="toast-header">
+                <i class="bi bi-info-circle me-2" id="toastIcon"></i>
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>

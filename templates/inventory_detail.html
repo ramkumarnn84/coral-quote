@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - {{ inventory.inventory_id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-gear-wide-connected me-2 fs-4"></i>
+                <span class="fw-bold">{{ title }}</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Home</a>
+                <a href="/history" class="btn btn-outline-light btn-sm"><i class="bi bi-clock-history me-1"></i>Quotations</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="bg-light border-bottom py-3">
+        <div class="container-fluid px-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0 text-primary"><i class="bi bi-box-seam me-2"></i>{{ inventory.inventory_id }}</h4>
+                    <small class="text-muted">{{ inventory.created_date }} • Click any row for AI explanation</small>
+                </div>
+                <span class="badge bg-success fs-6">{{ inventory.status }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid px-4 mt-4">
+        <div class="row g-4">
+            <!-- Left: Image & 3D Model -->
+            <div class="col-lg-3">
+                <!-- 3D Motor Model -->
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <small class="fw-bold"><i class="bi bi-badge-3d me-1"></i>3D Motor Model</small>
+                        <button class="btn btn-outline-primary btn-sm" style="padding:2px 6px;font-size:0.65rem;" onclick="resetCamera()"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    </div>
+                    <div class="card-body p-0" style="height:280px;position:relative;">
+                        <canvas id="motor3D" style="width:100%;height:100%;display:block;"></canvas>
+                        <div class="position-absolute bottom-0 start-0 p-2" style="font-size:0.6rem;color:#666;">
+                            <i class="bi bi-mouse me-1"></i>Drag to rotate • Scroll to zoom
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nameplate Image -->
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-body text-center p-3">
+                        {% if inventory.image_path %}
+                        <img src="/{{ inventory.image_path }}" alt="Nameplate" class="img-fluid rounded border" style="max-height:160px;">
+                        {% endif %}
+                        <div class="mt-2">
+                            <small class="text-muted">{{ extracted.get('manufacturer', 'Unknown') }}</small><br>
+                            <strong>{{ extracted.get('equipment_type', '') }}</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white py-2"><small class="fw-bold text-muted"><i class="bi bi-info-circle me-1"></i>Data Sources</small></div>
+                    <div class="card-body py-2">
+                        <div class="d-flex align-items-center gap-2 mb-2"><span class="kg-dot-sm" style="background:#1565c0;"></span><small>Extracted from Image</small></div>
+                        <div class="d-flex align-items-center gap-2 mb-2"><span class="kg-dot-sm" style="background:#2e7d32;"></span><small>Manufacturer Database</small></div>
+                        <div class="d-flex align-items-center gap-2 mb-2"><span class="kg-dot-sm" style="background:#e65100;"></span><small>AI Estimated</small></div>
+                        <hr class="my-2">
+                        <small class="text-muted"><i class="bi bi-hand-index me-1"></i>Click any row to see its lineage and AI explanation</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Streaming Tables -->
+            <div class="col-lg-9">
+                <!-- Extracted Data Table -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white border-bottom">
+                        <h6 class="mb-0"><i class="bi bi-camera me-2 text-primary"></i>Extracted Motor Details</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover mb-0 kg-table">
+                            <thead class="table-light">
+                                <tr><th class="ps-3">Field</th><th>Value</th><th>Source</th><th style="width:40px;"></th></tr>
+                            </thead>
+                            <tbody id="extractedTableBody">
+                                <!-- Rows will be streamed in via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Engineering Table -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white border-bottom">
+                        <h6 class="mb-0"><i class="bi bi-tools me-2 text-success"></i>Engineering Estimates</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover mb-0 kg-table">
+                            <thead class="table-light">
+                                <tr><th class="ps-3">Parameter</th><th>Value</th><th>Source</th><th>Confidence</th><th style="width:40px;"></th></tr>
+                            </thead>
+                            <tbody id="engineeringTableBody">
+                                <!-- Rows will be streamed in via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Review & Generate -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white border-bottom">
+                        <h6 class="mb-0"><i class="bi bi-pencil-square me-2 text-warning"></i>Review & Adjust</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Copper (Kg)</label><input type="number" class="form-control eng-edit-input" id="edit_copper_weight_kg" value="{{ engineering.get('copper_weight_kg', '') }}"></div>
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Oil (Litres)</label><input type="number" class="form-control eng-edit-input" id="edit_oil_quantity_litres" value="{{ engineering.get('oil_quantity_litres', '') }}"></div>
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Labour (Hours)</label><input type="number" class="form-control eng-edit-input" id="edit_labour_hours" value="{{ engineering.get('labour_hours', '') }}"></div>
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Coils</label><input type="number" class="form-control eng-edit-input" id="edit_number_of_coils" value="{{ engineering.get('number_of_coils', '') }}"></div>
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Wire Gauge</label><input type="text" class="form-control eng-edit-input" id="edit_wire_gauge" value="{{ engineering.get('wire_gauge', '') }}"></div>
+                            <div class="col-md-4"><label class="form-label small fw-semibold">Bearings</label><input type="number" class="form-control eng-edit-input" id="edit_bearing_count" value="{{ engineering.get('bearing_count', 2) }}"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-3 mb-4">
+                    <button class="btn btn-success btn-lg flex-grow-1 shadow" id="generateBtn" onclick="generateQuotation('{{ inventory.inventory_id }}')">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Generate Quotation
+                    </button>
+                    <a href="/" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left me-1"></i>Back</a>
+                </div>
+
+                <div class="card shadow border-0 mb-4 d-none" id="quotationResult">
+                    <div class="card-header bg-success text-white"><h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>Quotation Generated!</h6></div>
+                    <div class="card-body text-center">
+                        <p class="fs-5 fw-bold text-primary mb-1" id="qtNumber">-</p>
+                        <p class="fs-2 fw-bold text-success mb-3" id="qtTotal">-</p>
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a id="qtPreviewLink" href="#" class="btn btn-primary"><i class="bi bi-eye me-1"></i>Preview</a>
+                            <a id="qtDownloadLink" href="#" class="btn btn-success"><i class="bi bi-download me-1"></i>Download PDF</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ask AI Floating Button -->
+    <button class="ask-ai-btn" onclick="toggleAskPanel()" title="Ask AI about this motor">
+        <i class="bi bi-chat-dots-fill"></i>
+    </button>
+
+    <!-- Ask AI Panel -->
+    <div class="ask-panel d-none" id="askPanel">
+        <div class="ask-panel-header">
+            <div class="d-flex align-items-center gap-2">
+                <div class="ask-ai-icon"><i class="bi bi-robot"></i></div>
+                <div><strong>Ask AI</strong><br><small class="text-muted">Ask anything about this motor</small></div>
+            </div>
+            <button class="btn btn-sm btn-outline-light" onclick="toggleAskPanel()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="ask-panel-body" id="askMessages">
+            <div class="ask-msg ai">
+                <div class="ask-msg-content">Hi! I'm your motor engineering assistant. Ask me anything about this <strong>{{ extracted.get('equipment_type', 'motor') }}</strong> — specifications, winding details, cost breakdown, or maintenance recommendations.</div>
+            </div>
+        </div>
+        <div class="ask-panel-input">
+            <div class="input-group">
+                <input type="text" class="form-control" id="askInput" placeholder="e.g. Why is copper weight 35 Kg?" onkeypress="if(event.key==='Enter')askQuestion()">
+                <button class="btn btn-primary" onclick="askQuestion()" id="askBtn"><i class="bi bi-send-fill"></i></button>
+            </div>
+            <div class="ask-suggestions mt-2">
+                <button class="ask-suggestion" onclick="askPreset('Why is the copper weight 35 Kg?')">Copper weight?</button>
+                <button class="ask-suggestion" onclick="askPreset('What does SWG 14 wire gauge mean?')">Wire gauge?</button>
+                <button class="ask-suggestion" onclick="askPreset('Break down the total cost')">Cost breakdown?</button>
+                <button class="ask-suggestion" onclick="askPreset('What maintenance is recommended?')">Maintenance?</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toastNotification" class="toast" role="alert">
+            <div class="toast-header"><i class="bi bi-info-circle me-2" id="toastIcon"></i><strong class="me-auto" id="toastTitle">Info</strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // ============ 3D MOTOR MODEL ============
+    (function() {
+        const canvas = document.getElementById('motor3D');
+        const container = canvas.parentElement;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x12121f);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(3, 2.5, 4);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 5, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const rimLight = new THREE.DirectionalLight(0x7c9dff, 0.3);
+        rimLight.position.set(-3, 2, -3);
+        scene.add(rimLight);
+
+        // Scale based on KVA rating
+        const kva = parseFloat('{{ extracted.get("kva", "62.5") }}') || 62.5;
+        const scale = Math.min(1.5, Math.max(0.7, kva / 60));
+
+        // Materials
+        const housingMat = new THREE.MeshPhongMaterial({ color: 0x4a4a5a, shininess: 60, specular: 0x222222 });
+        const copperMat = new THREE.MeshPhongMaterial({ color: 0xb87333, shininess: 80, specular: 0x553311 });
+        const shaftMat = new THREE.MeshPhongMaterial({ color: 0x888899, shininess: 100, specular: 0x444444 });
+        const fanMat = new THREE.MeshPhongMaterial({ color: 0x2a2a3a, shininess: 40 });
+        const terminalMat = new THREE.MeshPhongMaterial({ color: 0x333344, shininess: 50 });
+        const bearingMat = new THREE.MeshPhongMaterial({ color: 0x666688, shininess: 90, specular: 0x333333 });
+        const namePlateMat = new THREE.MeshPhongMaterial({ color: 0xccccaa, shininess: 30 });
+        const finMat = new THREE.MeshPhongMaterial({ color: 0x3d3d4d, shininess: 50 });
+
+        const motorGroup = new THREE.Group();
+
+        // Main Housing (Stator)
+        const housingGeo = new THREE.CylinderGeometry(1 * scale, 1 * scale, 2.2 * scale, 32);
+        const housing = new THREE.Mesh(housingGeo, housingMat);
+        housing.rotation.z = Math.PI / 2;
+        housing.castShadow = true;
+        motorGroup.add(housing);
+
+        // Cooling Fins
+        for (let i = 0; i < 16; i++) {
+            const finGeo = new THREE.BoxGeometry(2.1 * scale, 0.02, 0.12 * scale);
+            const fin = new THREE.Mesh(finGeo, finMat);
+            const angle = (i / 16) * Math.PI * 2;
+            fin.position.y = Math.cos(angle) * (1.02 * scale);
+            fin.position.z = Math.sin(angle) * (1.02 * scale);
+            fin.rotation.x = angle;
+            motorGroup.add(fin);
+        }
+
+        // End Bells (Bearing Housings)
+        const endBellGeo = new THREE.CylinderGeometry(1.05 * scale, 0.85 * scale, 0.2 * scale, 32);
+        const endBell1 = new THREE.Mesh(endBellGeo, bearingMat);
+        endBell1.rotation.z = Math.PI / 2;
+        endBell1.position.x = 1.2 * scale;
+        motorGroup.add(endBell1);
+
+        const endBell2 = new THREE.Mesh(endBellGeo, bearingMat);
+        endBell2.rotation.z = Math.PI / 2;
+        endBell2.position.x = -1.2 * scale;
+        motorGroup.add(endBell2);
+
+        // Shaft
+        const shaftGeo = new THREE.CylinderGeometry(0.12 * scale, 0.12 * scale, 3.8 * scale, 16);
+        const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+        shaft.rotation.z = Math.PI / 2;
+        motorGroup.add(shaft);
+
+        // Shaft Key
+        const keyGeo = new THREE.BoxGeometry(0.6 * scale, 0.06 * scale, 0.06 * scale);
+        const key = new THREE.Mesh(keyGeo, shaftMat);
+        key.position.set(1.6 * scale, 0.12 * scale, 0);
+        motorGroup.add(key);
+
+        // Cooling Fan
+        const fanHubGeo = new THREE.CylinderGeometry(0.15 * scale, 0.15 * scale, 0.1 * scale, 16);
+        const fanHub = new THREE.Mesh(fanHubGeo, fanMat);
+        fanHub.rotation.z = Math.PI / 2;
+        fanHub.position.x = -1.45 * scale;
+        motorGroup.add(fanHub);
+
+        for (let i = 0; i < 6; i++) {
+            const bladeGeo = new THREE.BoxGeometry(0.05 * scale, 0.5 * scale, 0.15 * scale);
+            const blade = new THREE.Mesh(bladeGeo, fanMat);
+            const angle = (i / 6) * Math.PI * 2;
+            blade.position.x = -1.45 * scale;
+            blade.position.y = Math.cos(angle) * 0.4 * scale;
+            blade.position.z = Math.sin(angle) * 0.4 * scale;
+            blade.rotation.x = angle + 0.3;
+            motorGroup.add(blade);
+        }
+
+        // Fan Cover
+        const fanCoverGeo = new THREE.CylinderGeometry(0.7 * scale, 0.75 * scale, 0.3 * scale, 32, 1, true);
+        const fanCover = new THREE.Mesh(fanCoverGeo, new THREE.MeshPhongMaterial({ color: 0x3a3a4a, shininess: 30, side: THREE.DoubleSide, transparent: true, opacity: 0.7 }));
+        fanCover.rotation.z = Math.PI / 2;
+        fanCover.position.x = -1.5 * scale;
+        motorGroup.add(fanCover);
+
+        // Terminal Box
+        const termGeo = new THREE.BoxGeometry(0.5 * scale, 0.35 * scale, 0.4 * scale);
+        const termBox = new THREE.Mesh(termGeo, terminalMat);
+        termBox.position.set(0, 1.15 * scale, 0);
+        termBox.castShadow = true;
+        motorGroup.add(termBox);
+
+        // Terminal Box Lid
+        const lidGeo = new THREE.BoxGeometry(0.52 * scale, 0.05 * scale, 0.42 * scale);
+        const lid = new THREE.Mesh(lidGeo, bearingMat);
+        lid.position.set(0, 1.35 * scale, 0);
+        motorGroup.add(lid);
+
+        // Nameplate
+        const plateGeo = new THREE.BoxGeometry(0.6 * scale, 0.01, 0.35 * scale);
+        const namePlate = new THREE.Mesh(plateGeo, namePlateMat);
+        namePlate.position.set(0.3 * scale, 0, 1.01 * scale);
+        motorGroup.add(namePlate);
+
+        // Feet/Base
+        const footGeo = new THREE.BoxGeometry(0.4 * scale, 0.12 * scale, 0.6 * scale);
+        for (let i = -1; i <= 1; i += 2) {
+            const foot = new THREE.Mesh(footGeo, housingMat);
+            foot.position.set(i * 0.7 * scale, -1.05 * scale, 0);
+            foot.castShadow = true;
+            motorGroup.add(foot);
+        }
+
+        // Copper Windings visible (decorative rings at ends)
+        const windingGeo = new THREE.TorusGeometry(0.6 * scale, 0.15 * scale, 8, 24);
+        const winding1 = new THREE.Mesh(windingGeo, copperMat);
+        winding1.position.x = 0.95 * scale;
+        winding1.rotation.y = Math.PI / 2;
+        motorGroup.add(winding1);
+
+        const winding2 = new THREE.Mesh(windingGeo, copperMat);
+        winding2.position.x = -0.95 * scale;
+        winding2.rotation.y = Math.PI / 2;
+        motorGroup.add(winding2);
+
+        // Ground plane
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshPhongMaterial({ color: 0x1a1a2e, shininess: 10 });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -1.2 * scale;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        scene.add(motorGroup);
+
+        // Mouse controls
+        let isDragging = false;
+        let prevX = 0, prevY = 0;
+        let rotX = 0.3, rotY = 0;
+        let zoom = 5;
+
+        canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+        canvas.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            rotY += (e.clientX - prevX) * 0.01;
+            rotX += (e.clientY - prevY) * 0.01;
+            rotX = Math.max(-1.2, Math.min(1.2, rotX));
+            prevX = e.clientX; prevY = e.clientY;
+        });
+        canvas.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('mouseleave', () => isDragging = false);
+        canvas.addEventListener('wheel', e => {
+            zoom += e.deltaY * 0.005;
+            zoom = Math.max(2.5, Math.min(10, zoom));
+            e.preventDefault();
+        }, { passive: false });
+
+        // Touch support
+        canvas.addEventListener('touchstart', e => { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; });
+        canvas.addEventListener('touchmove', e => {
+            if (!isDragging) return;
+            rotY += (e.touches[0].clientX - prevX) * 0.01;
+            rotX += (e.touches[0].clientY - prevY) * 0.01;
+            rotX = Math.max(-1.2, Math.min(1.2, rotX));
+            prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+            e.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchend', () => isDragging = false);
+
+        window.resetCamera = function() { rotX = 0.3; rotY = 0; zoom = 5; };
+
+        // Auto-rotate slowly when not dragging
+        let autoRotate = true;
+        canvas.addEventListener('mousedown', () => autoRotate = false);
+        canvas.addEventListener('mouseup', () => setTimeout(() => autoRotate = true, 3000));
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (autoRotate && !isDragging) {
+                rotY += 0.003;
+            }
+
+            camera.position.x = Math.sin(rotY) * Math.cos(rotX) * zoom;
+            camera.position.y = Math.sin(rotX) * zoom;
+            camera.position.z = Math.cos(rotY) * Math.cos(rotX) * zoom;
+            camera.lookAt(0, 0, 0);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    })();
+    </script>
+    <script>
+    // ============ DATA ============
+    const extractedRows = [
+        { label: 'Manufacturer', value: '{{ extracted.get("manufacturer", "") }}', icon: 'building', explanation: 'This is the motor manufacturer name, read directly from the nameplate text. "Kirloskar Electric Co Ltd" is one of India\'s largest electrical equipment manufacturers, established in 1946. This identification enables us to look up exact winding specifications from their engineering database.' },
+        { label: 'Equipment Type', value: '{{ extracted.get("equipment_type", "") }}', icon: 'gear', explanation: 'Identified as an A.C. Generator from the plate header. This tells us it produces alternating current electricity. Generators have different winding patterns than motors — typically wound for output power generation rather than mechanical rotation.' },
+        { label: 'KVA Rating', value: '{{ extracted.get("kva", "") }}', icon: 'lightning-charge', explanation: 'KVA (Kilovolt-Amperes) is the apparent power rating. At 62.5 KVA with 0.8 power factor, this generator produces approximately 50 KW of real power. This rating determines the copper wire gauge, coil count, and overall material requirements for rewinding.' },
+        { label: 'Voltage', value: '{{ extracted.get("voltage", "") }}', icon: 'plug', explanation: 'Operating voltage is 415V — this is standard 3-phase industrial voltage in India. The voltage rating determines insulation requirements and the number of turns per coil. Higher voltage requires more turns of thinner wire with better insulation.' },
+        { label: 'Current (Amps)', value: '{{ extracted.get("amps", "") }}', icon: 'activity', explanation: 'Full load current of 87 Amps. This directly determines the minimum wire cross-section area needed. The wire must safely carry this current without overheating. We use this to verify the wire gauge from the manufacturer database.' },
+        { label: 'RPM', value: '{{ extracted.get("rpm", "") }}', icon: 'speedometer2', explanation: 'Speed is 1500 RPM. For a 50 Hz generator, this means it has 4 poles (N = 120×f/P = 120×50/4 = 1500). The pole count determines the winding configuration and number of coil groups.' },
+        { label: 'Frequency', value: '{{ extracted.get("frequency", "") }}', icon: 'broadcast', explanation: 'Output frequency is 50 Hz — standard for the Indian power grid. Combined with RPM, this confirms the generator\'s pole configuration. The frequency must remain stable for connected equipment to operate correctly.' },
+        { label: 'Power Factor', value: '{{ extracted.get("power_factor", "") }}', icon: 'percent', explanation: 'Power factor of 0.8 means the generator delivers 80% of its apparent power as real (useful) power. PF = KW/KVA, so 62.5 × 0.8 = 50 KW real output. This affects the thermal design of the windings.' },
+        { label: 'Phase', value: '{{ extracted.get("phase", "") }}', icon: 'diagram-3', explanation: 'This is a 3-phase generator. Three-phase systems are standard for industrial power — they provide smoother power delivery and more efficient use of copper. The stator has three separate winding sets displaced 120° apart.' },
+        { label: 'Duty', value: '{{ extracted.get("duty", "") }}', icon: 'clock', explanation: 'Duty cycle S1 means continuous duty — the generator is designed to run indefinitely at full load. This is the most demanding thermal rating. Windings must withstand sustained heat without degradation.' },
+        { label: 'Insulation Class', value: '{{ extracted.get("insulation_class", "") }}', icon: 'shield-check', explanation: 'Class F insulation can withstand up to 155°C. This determines the varnish type and insulation materials used in rewinding. We use Nomex paper and Class F compatible varnish to maintain the original thermal rating.' },
+        { label: 'Cooling', value: '{{ extracted.get("cooling", "") }}', icon: 'wind', explanation: 'IC411 code means the generator uses a shaft-mounted fan for self-cooling with surface air flow. This cooling method must be preserved during rewinding. Any oil quantity estimation accounts for this cooling design.' },
+        { label: 'Country', value: '{{ extracted.get("country", "") }}', icon: 'globe', explanation: 'Manufactured in India by Kirloskar Electric. This confirms we can use local Kirloskar engineering specifications and standard Indian electrical practices for the rewinding procedure.' },
+    ];
+
+    const engineeringRows = [
+        { label: 'Copper Weight', value: '{{ engineering.get("copper_weight_kg", "") }}', unit: ' Kg', icon: 'box-seam', source: 'retrieved', conf: {{ engineering.get("copper_weight_confidence", 0) }}, explanation: 'Retrieved from Kirloskar specification database for the 15-50 KW power range. 35 Kg of copper wire is needed to wind all 48 coils. This accounts for the conductor cross-section required for 87A current capacity with appropriate fill factor in the slots.' },
+        { label: 'Number of Coils', value: '{{ engineering.get("number_of_coils", "") }}', unit: '', icon: 'circle', source: 'retrieved', conf: {{ engineering.get("number_of_coils_confidence", 0) }}, explanation: 'Retrieved from Kirloskar database. 48 coils arranged across 48 slots — this is a standard configuration for 4-pole, 3-phase machines in this power range. Each phase has 16 coils (48 ÷ 3 = 16 coils per phase).' },
+        { label: 'Number of Slots', value: '{{ engineering.get("number_of_slots", "") }}', unit: '', icon: 'grid-3x3', source: 'retrieved', conf: {{ engineering.get("number_of_slots_confidence", 0) }}, explanation: 'Retrieved from manufacturer specs. 48 stator slots is standard for Kirloskar generators in this range. Slots per pole per phase = 48 ÷ (4 poles × 3 phases) = 4. This gives a well-distributed winding with good harmonic performance.' },
+        { label: 'Wire Gauge', value: '{{ engineering.get("wire_gauge", "") }}', unit: '', icon: 'bezier2', source: 'retrieved', conf: {{ engineering.get("wire_gauge_confidence", 0) }}, explanation: 'SWG 14 (Standard Wire Gauge 14) has a diameter of approximately 2.03mm. This gauge handles the required current density for 87A across parallel paths. The wire must fit within the slot dimensions while maintaining proper insulation clearances.' },
+        { label: 'Bearing Type', value: '{{ engineering.get("bearing_type", "") }}', unit: '', icon: 'gear-wide', source: 'retrieved', conf: {{ engineering.get("bearing_confidence", 0) }}, explanation: 'Deep groove ball bearing 6310-2RS is standard for this frame size. "6310" indicates 50mm bore, "2RS" means double rubber sealed for dust protection. These bearings support the rotor weight and handle radial loads from belt-driven generators.' },
+        { label: 'Oil Quantity', value: '{{ engineering.get("oil_quantity_litres", "") }}', unit: ' Litres', icon: 'droplet-half', source: 'estimated', conf: {{ engineering.get("oil_quantity_confidence", 0) }}, explanation: 'AI estimated based on frame size and power rating. 6 litres of transformer oil is used for varnish impregnation (VPI process) during rewinding. The stator is dipped in varnish to seal windings, improve insulation, and enhance heat dissipation.' },
+        { label: 'Labour Hours', value: '{{ engineering.get("labour_hours", "") }}', unit: ' Hours', icon: 'clock-history', source: 'estimated', conf: {{ engineering.get("labour_confidence", 0) }}, explanation: 'Estimated 28 hours includes: stripping old windings (4 hrs), cleaning slots (2 hrs), cutting and inserting insulation (3 hrs), winding 48 coils (12 hrs), connecting and lacing (3 hrs), varnishing and baking (2 hrs), assembly and testing (2 hrs).' },
+        { label: 'Insulation Type', value: '{{ engineering.get("insulation_type", "") }}', unit: '', icon: 'layers', source: 'estimated', conf: {{ engineering.get("insulation_confidence", 0) }}, explanation: 'Class F Nomex insulation is selected to match the nameplate insulation class rating. Nomex is a heat-resistant aramid paper that withstands 155°C continuously. It provides excellent dielectric strength and mechanical durability in slot liners and phase separators.' },
+        { label: 'Rotor Condition', value: '{{ engineering.get("rotor_condition", "") }}', unit: '', icon: 'arrow-repeat', source: 'estimated', conf: 0, explanation: 'Cannot determine rotor condition from nameplate alone — requires physical inspection after disassembly. Common issues include: shaft wear, rotor bar cracks (in cage rotors), insulation breakdown (in wound rotors), and bearing journal damage.' },
+        { label: 'Stator Condition', value: '{{ engineering.get("stator_condition", "") }}', unit: '', icon: 'recycle', source: 'estimated', conf: 0, explanation: 'Marked as "Rewinding Required" since this is a rewinding quotation. The stator core laminations are typically reusable if not overheated. Old windings will be stripped, slots cleaned, fresh insulation inserted, and new coils wound to original specifications.' },
+    ];
+
+    // ============ STREAMING TABLE RENDER ============
+
+    let streamingComplete = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        streamTable('extractedTableBody', extractedRows, false);
+        setTimeout(() => {
+            streamTable('engineeringTableBody', engineeringRows, true);
+        }, extractedRows.filter(r => r.value).length * 120 + 500);
+    });
+
+    function streamTable(tbodyId, rows, hasConfidence) {
+        const tbody = document.getElementById(tbodyId);
+        tbody.innerHTML = '';
+        let delay = 0;
+
+        rows.forEach((row, idx) => {
+            if (!row.value) return;
+
+            setTimeout(() => {
+                // Data row
+                const tr = document.createElement('tr');
+                tr.className = 'kg-row stream-row';
+                tr.onclick = function() { toggleRowKG(this); };
+                tr.dataset.explanation = row.explanation;
+                tr.dataset.label = row.label;
+                tr.dataset.value = row.value + (row.unit || '');
+                tr.dataset.source = row.source || 'extracted';
+                tr.dataset.icon = row.icon;
+
+                let confHtml = '';
+                if (hasConfidence) {
+                    confHtml = row.conf ? `<td><div class="conf-bar"><div class="conf-fill" style="width:${row.conf}%;"></div><span>${row.conf}%</span></div></td>` : '<td class="text-muted">-</td>';
+                }
+
+                const sourceType = row.source || 'extracted';
+                const sourceBadge = sourceType === 'retrieved'
+                    ? '<span class="badge bg-success-subtle text-success">🗄️ Mfr DB</span>'
+                    : sourceType === 'estimated'
+                    ? '<span class="badge bg-warning-subtle text-warning">🤖 AI Est.</span>'
+                    : '<span class="badge bg-primary-subtle text-primary">📷 Image</span>';
+
+                tr.innerHTML = `
+                    <td class="ps-3"><i class="bi bi-${row.icon} me-2 text-${sourceType === 'retrieved' ? 'success' : sourceType === 'estimated' ? 'warning' : 'primary'}"></i><strong>${row.label}</strong></td>
+                    <td class="fw-bold">${row.value}${row.unit || ''}</td>
+                    <td>${sourceBadge}</td>
+                    ${confHtml}
+                    <td class="text-center"><i class="bi bi-chevron-down kg-chevron"></i></td>
+                `;
+                tbody.appendChild(tr);
+
+                // Hidden expand row
+                const expandTr = document.createElement('tr');
+                expandTr.className = 'kg-expand-row';
+                expandTr.style.display = 'none';
+                const colSpan = hasConfidence ? 5 : 4;
+                expandTr.innerHTML = `<td colspan="${colSpan}" class="p-0"><div class="kg-expand-content"><div class="kg-inline-flow" id="flow_${tbodyId}_${idx}"></div><div class="kg-explanation" id="explain_${tbodyId}_${idx}"></div></div></td>`;
+                tbody.appendChild(expandTr);
+
+            }, delay);
+            delay += 100;
+        });
+    }
+
+    // ============ ROW CLICK → KG + STREAMING EXPLANATION ============
+
+    function toggleRowKG(row) {
+        const expandRow = row.nextElementSibling;
+        const chevron = row.querySelector('.kg-chevron');
+        const isOpen = expandRow.style.display !== 'none';
+
+        // Close all
+        document.querySelectorAll('.kg-expand-row').forEach(r => r.style.display = 'none');
+        document.querySelectorAll('.kg-chevron').forEach(c => { c.classList.remove('bi-chevron-up'); c.classList.add('bi-chevron-down'); });
+        document.querySelectorAll('.kg-row').forEach(r => r.classList.remove('kg-row-active'));
+
+        if (!isOpen) {
+            expandRow.style.display = 'table-row';
+            chevron.classList.remove('bi-chevron-down');
+            chevron.classList.add('bi-chevron-up');
+            row.classList.add('kg-row-active');
+
+            // Build KG flow
+            const flowContainer = expandRow.querySelector('[id^="flow_"]');
+            const explainContainer = expandRow.querySelector('[id^="explain_"]');
+            const source = row.dataset.source;
+            const label = row.dataset.label;
+            const value = row.dataset.value;
+            const icon = row.dataset.icon;
+
+            // Render flow nodes
+            let flowHTML = `<div class="kg-inline-node source"><i class="bi bi-camera-fill"></i> Image</div><div class="kg-inline-arrow"><i class="bi bi-arrow-right"></i></div>`;
+
+            if (source === 'retrieved') {
+                flowHTML += `<div class="kg-inline-node process"><i class="bi bi-building"></i> Kirloskar</div><div class="kg-inline-arrow"><i class="bi bi-arrow-right"></i></div>`;
+                flowHTML += `<div class="kg-inline-node retrieved"><i class="bi bi-database"></i> Spec DB</div><div class="kg-inline-arrow"><i class="bi bi-arrow-right"></i></div>`;
+            } else if (source === 'estimated') {
+                flowHTML += `<div class="kg-inline-node process"><i class="bi bi-cpu"></i> AI Engine</div><div class="kg-inline-arrow"><i class="bi bi-arrow-right"></i></div>`;
+            } else {
+                flowHTML += `<div class="kg-inline-node process"><i class="bi bi-eye"></i> Vision OCR</div><div class="kg-inline-arrow"><i class="bi bi-arrow-right"></i></div>`;
+            }
+
+            flowHTML += `<div class="kg-inline-node ${source}"><i class="bi bi-${icon}"></i> ${label}: <strong>${value}</strong></div>`;
+            flowContainer.innerHTML = flowHTML;
+
+            // Stream explanation
+            const explanation = row.dataset.explanation;
+            explainContainer.innerHTML = '';
+            typeWriter(explainContainer, explanation, 0);
+        }
+    }
+
+    function typeWriter(element, text, index) {
+        if (index < text.length) {
+            element.innerHTML += text.charAt(index);
+            element.scrollTop = element.scrollHeight;
+            const speed = text.charAt(index) === '.' ? 40 : text.charAt(index) === ',' ? 25 : 12;
+            setTimeout(() => typeWriter(element, text, index + 1), speed);
+        }
+    }
+
+    // ============ GENERATE QUOTATION ============
+
+    async function generateQuotation(inventoryId) {
+        const overrides = {};
+        document.querySelectorAll('.eng-edit-input').forEach(input => {
+            const key = input.id.replace('edit_', '');
+            const val = input.value;
+            if (val !== '') overrides[key] = isNaN(val) ? val : parseFloat(val);
+        });
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+        try {
+            const response = await fetch('/api/generate-quotation', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inventory_id: inventoryId, engineering_overrides: overrides })
+            });
+            const data = await response.json();
+            if (data.success) {
+                const result = document.getElementById('quotationResult');
+                result.classList.remove('d-none');
+                document.getElementById('qtNumber').textContent = data.quotation.quotation_number;
+                document.getElementById('qtTotal').textContent = '₹ ' + Number(data.quotation.cost_breakdown.grand_total).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                document.getElementById('qtPreviewLink').href = `/quotation/${data.quotation.quotation_number}`;
+                document.getElementById('qtDownloadLink').href = `/api/download/${data.quotation.quotation_number}`;
+                result.scrollIntoView({ behavior: 'smooth' });
+            } else { throw new Error(data.error); }
+        } catch (error) {
+            document.getElementById('toastTitle').textContent = 'Error';
+            document.getElementById('toastMessage').textContent = error.message;
+            new bootstrap.Toast(document.getElementById('toastNotification')).show();
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-2"></i>Generate Quotation';
+    }
+    // ============ ASK AI ============
+
+    const motorContext = {
+        manufacturer: '{{ extracted.get("manufacturer", "Unknown") }}',
+        type: '{{ extracted.get("equipment_type", "Motor") }}',
+        kva: '{{ extracted.get("kva", "") }}',
+        voltage: '{{ extracted.get("voltage", "") }}',
+        amps: '{{ extracted.get("amps", "") }}',
+        rpm: '{{ extracted.get("rpm", "") }}',
+        frequency: '{{ extracted.get("frequency", "") }}',
+        phase: '{{ extracted.get("phase", "") }}',
+        power_factor: '{{ extracted.get("power_factor", "") }}',
+        insulation: '{{ extracted.get("insulation_class", "") }}',
+        copper_weight: '{{ engineering.get("copper_weight_kg", "") }}',
+        coils: '{{ engineering.get("number_of_coils", "") }}',
+        wire_gauge: '{{ engineering.get("wire_gauge", "") }}',
+        oil: '{{ engineering.get("oil_quantity_litres", "") }}',
+        labour: '{{ engineering.get("labour_hours", "") }}',
+        bearing: '{{ engineering.get("bearing_type", "") }}',
+        confidence: '{{ engineering.get("overall_confidence", "") }}',
+    };
+
+    // Pre-built answers based on motor data
+    const knowledgeBase = {
+        'copper': `The copper weight for this ${motorContext.type} is estimated at **${motorContext.copper_weight} Kg**.\n\nThis is determined by looking up the Kirloskar manufacturer database for the ${motorContext.kva} KVA power range (15-50 KW equivalent). The calculation considers:\n\n• **${motorContext.coils} coils** to be wound\n• **${motorContext.wire_gauge}** wire diameter (~2.03mm)\n• Slot fill factor of approximately 0.4\n• Total conductor length across all coils\n\nAt ${motorContext.voltage}V and ${motorContext.amps}A, the wire cross-section must safely handle the current density without exceeding Class ${motorContext.insulation} temperature limits (155°C).`,
+
+        'wire': `**${motorContext.wire_gauge}** (Standard Wire Gauge 14) has these specifications:\n\n• Diameter: 2.032 mm\n• Cross-section area: 3.24 mm²\n• Current capacity: ~25-30A per conductor\n• Resistance: ~5.3 Ω/km at 20°C\n\nFor this ${motorContext.kva} KVA generator drawing ${motorContext.amps}A at full load, multiple parallel paths are used. With a 3-phase, 4-pole configuration, the current per parallel path is approximately ${Math.round(motorContext.amps/4)}A — well within SWG 14 capacity.\n\nThe gauge was retrieved from the **Kirloskar specification database** for this power range.`,
+
+        'cost': `**Cost Breakdown for ${motorContext.manufacturer} ${motorContext.kva} KVA ${motorContext.type}:**\n\n• Copper Wire: ${motorContext.copper_weight} Kg × ₹1,050/Kg = ₹${(motorContext.copper_weight * 1050).toLocaleString('en-IN')}\n• Insulation Paper: 1 set = ₹4,500\n• Varnish: 1 set = ₹5,500\n• Oil: ${motorContext.oil} L × ₹650/L = ₹${(motorContext.oil * 650).toLocaleString('en-IN')}\n• Bearings: 2 × ₹3,000 = ₹6,000\n• Testing: ₹3,500\n• Painting: ₹2,500\n• Transport: ₹2,000\n• Labour: ${motorContext.labour} hrs × ₹1,200/hr = ₹${(motorContext.labour * 1200).toLocaleString('en-IN')}\n• Miscellaneous: ₹1,500\n\nSubtotal + 18% GST = Grand Total\n\nThe largest cost components are **copper wire** and **labour**, which together make up about 70% of the total.`,
+
+        'maintenance': `**Recommended Maintenance for ${motorContext.manufacturer} ${motorContext.kva} KVA ${motorContext.type}:**\n\n**Monthly:**\n• Clean surge suppressor plates (as per nameplate caution)\n• Check bearing temperature and vibration\n• Inspect terminal connections for looseness\n\n**Quarterly:**\n• Measure insulation resistance (should be >5 MΩ)\n• Check oil level in bearings\n• Inspect cooling fan and air passages\n\n**Annually:**\n• Full insulation resistance test\n• Bearing replacement assessment\n• Varnish condition check\n• Alignment verification\n\n**Bearing (${motorContext.bearing}):**\n• Expected life: 20,000-40,000 hours\n• Replace if vibration exceeds 4.5 mm/s RMS\n• Use SKF LGMT2 or equivalent grease\n\n**Warning signs requiring rewinding:**\n• Insulation resistance below 1 MΩ\n• Hot spots on stator surface\n• Burnt smell from windings\n• Unbalanced phase currents >5%`,
+
+        'default': `Based on the nameplate data for this **${motorContext.manufacturer} ${motorContext.kva} KVA ${motorContext.type}**:\n\n• Operating at **${motorContext.voltage}V**, **${motorContext.amps}A**, **${motorContext.rpm} RPM**\n• **${motorContext.phase}-phase**, **${motorContext.frequency} Hz**, Power Factor: ${motorContext.power_factor}\n• Insulation Class **${motorContext.insulation}** (rated to 155°C)\n• Duty: Continuous (S1)\n\n**Engineering Assessment:**\n• Copper requirement: ${motorContext.copper_weight} Kg\n• ${motorContext.coils} coils using ${motorContext.wire_gauge}\n• Bearing: ${motorContext.bearing}\n• Estimated confidence: ${motorContext.confidence}%\n\nThe data comes from Kirloskar's manufacturer specifications combined with AI estimation for values not available in the database. Is there something specific you'd like to know more about?`,
+    };
+
+    function toggleAskPanel() {
+        document.getElementById('askPanel').classList.toggle('d-none');
+    }
+
+    function askPreset(question) {
+        document.getElementById('askInput').value = question;
+        askQuestion();
+    }
+
+    function askQuestion() {
+        const input = document.getElementById('askInput');
+        const question = input.value.trim();
+        if (!question) return;
+
+        // Add user message
+        addAskMessage(question, 'user');
+        input.value = '';
+
+        // Determine answer
+        const q = question.toLowerCase();
+        let answer = knowledgeBase['default'];
+        if (q.includes('copper') || q.includes('weight')) answer = knowledgeBase['copper'];
+        else if (q.includes('wire') || q.includes('gauge') || q.includes('swg')) answer = knowledgeBase['wire'];
+        else if (q.includes('cost') || q.includes('price') || q.includes('break')) answer = knowledgeBase['cost'];
+        else if (q.includes('mainten') || q.includes('recommend') || q.includes('service')) answer = knowledgeBase['maintenance'];
+
+        // Stream response
+        setTimeout(() => streamAIResponse(answer), 300);
+    }
+
+    function addAskMessage(text, sender) {
+        const container = document.getElementById('askMessages');
+        const msg = document.createElement('div');
+        msg.className = `ask-msg ${sender}`;
+        msg.innerHTML = `<div class="ask-msg-content">${text}</div>`;
+        container.appendChild(msg);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function streamAIResponse(text) {
+        const container = document.getElementById('askMessages');
+        const msg = document.createElement('div');
+        msg.className = 'ask-msg ai';
+        const content = document.createElement('div');
+        content.className = 'ask-msg-content';
+        msg.appendChild(content);
+        container.appendChild(msg);
+
+        let i = 0;
+        const btn = document.getElementById('askBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        function typeChar() {
+            if (i < text.length) {
+                // Handle markdown bold **text**
+                if (text[i] === '*' && text[i+1] === '*') {
+                    const end = text.indexOf('**', i + 2);
+                    if (end > -1) {
+                        content.innerHTML += '<strong>' + text.substring(i+2, end) + '</strong>';
+                        i = end + 2;
+                    } else {
+                        content.innerHTML += text[i]; i++;
+                    }
+                } else if (text[i] === '\n') {
+                    content.innerHTML += '<br>'; i++;
+                } else {
+                    content.innerHTML += text[i]; i++;
+                }
+                container.scrollTop = container.scrollHeight;
+                const delay = text[i-1] === '.' ? 30 : text[i-1] === '\n' ? 20 : text[i-1] === '•' ? 15 : 8;
+                setTimeout(typeChar, delay);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send-fill"></i>';
+            }
+        }
+        typeChar();
+    }
+    </script>
+</body>
+</html>

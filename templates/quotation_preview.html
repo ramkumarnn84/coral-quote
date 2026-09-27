@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Quotation {{ quotation.quotation_number }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom no-print">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-gear-wide-connected me-2 fs-4"></i>
+                <span class="fw-bold">{{ title }}</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-house me-1"></i>Home
+                </a>
+                <a href="/history" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-clock-history me-1"></i>History
+                </a>
+                <a href="/api/download/{{ quotation.quotation_number }}" class="btn btn-success btn-sm">
+                    <i class="bi bi-download me-1"></i>Download PDF
+                </a>
+                <button class="btn btn-light btn-sm" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>Print
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Quotation Preview -->
+    <div class="container mt-4 mb-5">
+        <div class="quotation-page card shadow border-0">
+            <!-- Header -->
+            <div class="card-body">
+                <div class="text-center border-bottom pb-3 mb-4">
+                    <h2 class="text-primary fw-bold mb-1">{{ company.name }}</h2>
+                    <p class="mb-0 text-muted">{{ company.address }}</p>
+                    <p class="mb-0 text-muted small">
+                        Phone: {{ company.phone }} | Email: {{ company.email }} | Web: {{ company.website }}
+                    </p>
+                </div>
+
+                <!-- Quotation Title -->
+                <div class="text-center mb-4">
+                    <h3 class="text-primary"><i class="bi bi-file-earmark-text me-2"></i>REWINDING QUOTATION</h3>
+                </div>
+
+                <!-- Quotation Info -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="fw-bold text-muted" style="width:140px;">Quotation No:</td>
+                                <td class="fw-bold text-primary">{{ quotation.quotation_number }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Inventory ID:</td>
+                                <td>{{ quotation.inventory_id }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Prepared By:</td>
+                                <td>{{ company.name }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="fw-bold text-muted">Date:</td>
+                                <td>{{ quotation.created_date }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Status:</td>
+                                <td><span class="badge bg-success">{{ quotation.status }}</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Motor Image -->
+                {% if quotation.image_path %}
+                <div class="text-center mb-4">
+                    <img src="/{{ quotation.image_path }}" alt="Motor Nameplate"
+                         class="img-fluid rounded border" style="max-height: 250px;">
+                </div>
+                {% endif %}
+
+                <!-- Motor Details -->
+                <div class="mb-4">
+                    <h5 class="text-primary border-bottom pb-2">
+                        <i class="bi bi-cpu me-2"></i>Motor / Generator Details
+                    </h5>
+                    <div class="row g-2">
+                        {% set motor = quotation.motor_details %}
+                        {% for label, key in [
+                            ('Manufacturer', 'manufacturer'), ('Model', 'model'),
+                            ('Equipment Type', 'equipment_type'), ('Power', 'power'),
+                            ('Voltage', 'voltage'), ('Current', 'current'),
+                            ('RPM', 'rpm'), ('Frequency', 'frequency'),
+                            ('Phase', 'phase'), ('Power Factor', 'power_factor'),
+                            ('Frame', 'frame_number'), ('Serial Number', 'serial_number'),
+                            ('Duty', 'duty'), ('Insulation Class', 'insulation_class'),
+                            ('Connection', 'connection')
+                        ] %}
+                        <div class="col-md-4 col-6">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-muted d-block">{{ label }}</small>
+                                <span class="fw-semibold">{{ motor.get(key) or 'N/A' }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Engineering Details -->
+                <div class="mb-4">
+                    <h5 class="text-primary border-bottom pb-2">
+                        <i class="bi bi-tools me-2"></i>Engineering Details
+                    </h5>
+                    {% set eng = quotation.engineering_details %}
+                    <table class="table table-sm table-striped">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Value</th>
+                                <th class="text-center">Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Copper Weight</td>
+                                <td>{{ eng.get('copper_weight_kg', 'N/A') }} Kg</td>
+                                <td class="text-center">{{ eng.get('copper_weight_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Number of Coils</td>
+                                <td>{{ eng.get('number_of_coils', 'N/A') }}</td>
+                                <td class="text-center">{{ eng.get('number_of_coils_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Wire Gauge</td>
+                                <td>{{ eng.get('wire_gauge', 'N/A') }}</td>
+                                <td class="text-center">{{ eng.get('wire_gauge_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Oil Quantity</td>
+                                <td>{{ eng.get('oil_quantity_litres', 'N/A') }} Litres</td>
+                                <td class="text-center">{{ eng.get('oil_quantity_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Insulation Type</td>
+                                <td>{{ eng.get('insulation_type', 'N/A') }}</td>
+                                <td class="text-center">{{ eng.get('insulation_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Bearing Type</td>
+                                <td>{{ eng.get('bearing_type', 'N/A') }}</td>
+                                <td class="text-center">{{ eng.get('bearing_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Rotor Condition</td>
+                                <td>{{ eng.get('rotor_condition', 'N/A') }}</td>
+                                <td class="text-center">-</td>
+                            </tr>
+                            <tr>
+                                <td>Stator Condition</td>
+                                <td>{{ eng.get('stator_condition', 'N/A') }}</td>
+                                <td class="text-center">-</td>
+                            </tr>
+                            <tr>
+                                <td>Labour Hours</td>
+                                <td>{{ eng.get('labour_hours', 'N/A') }} Hours</td>
+                                <td class="text-center">{{ eng.get('labour_confidence', 'N/A') }}%</td>
+                            </tr>
+                            <tr class="table-info">
+                                <td class="fw-bold">Overall Confidence</td>
+                                <td colspan="2" class="text-center fw-bold">{{ eng.get('overall_confidence', 'N/A') }}%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="small text-muted"><i class="bi bi-info-circle me-1"></i>Source: {{ eng.get('estimation_source', 'AI Estimated') }}</p>
+                </div>
+
+                <!-- Cost Breakdown -->
+                <div class="mb-4">
+                    <h5 class="text-primary border-bottom pb-2">
+                        <i class="bi bi-calculator me-2"></i>Cost Breakdown
+                    </h5>
+                    {% set cost = quotation.cost_breakdown %}
+                    <table class="table table-sm">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>#</th>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th class="text-end">Unit Price (₹)</th>
+                                <th class="text-end">Amount (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in cost.get('items', []) %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ item.item }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td class="text-end">₹ {{ "{:,.2f}".format(item.unit_price) }}</td>
+                                <td class="text-end">₹ {{ "{:,.2f}".format(item.amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-top">
+                                <td colspan="4" class="text-end fw-bold">Subtotal:</td>
+                                <td class="text-end fw-bold">₹ {{ "{:,.2f}".format(cost.get('subtotal', 0)) }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold">GST ({{ cost.get('gst_percentage', 18) }}%):</td>
+                                <td class="text-end fw-bold">₹ {{ "{:,.2f}".format(cost.get('gst_amount', 0)) }}</td>
+                            </tr>
+                            <tr class="table-success">
+                                <td colspan="4" class="text-end fw-bold fs-5">GRAND TOTAL:</td>
+                                <td class="text-end fw-bold fs-5">₹ {{ "{:,.2f}".format(cost.get('grand_total', 0)) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Terms -->
+                <div class="mb-4">
+                    <h5 class="text-primary border-bottom pb-2">
+                        <i class="bi bi-file-text me-2"></i>Terms & Conditions
+                    </h5>
+                    <ol class="small text-muted">
+                        <li>This quotation is valid for 30 days from the date of issue.</li>
+                        <li>Material costs are subject to market fluctuation.</li>
+                        <li>Final cost may change after dismantling and inspection.</li>
+                        <li>Customer approval is required before commencing repair work.</li>
+                        <li>Payment terms: 50% advance, 50% on completion.</li>
+                        <li>Warranty: 12 months from date of delivery for rewinding work.</li>
+                        <li>Delivery timeline will be communicated after inspection.</li>
+                    </ol>
+                </div>
+
+                <!-- Signature -->
+                <div class="row mt-5 pt-4 border-top">
+                    <div class="col-6">
+                        <div class="border-top border-dark pt-2 mt-5" style="width: 200px;">
+                            <strong>Customer Signature</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 text-end">
+                        <div class="border-top border-dark pt-2 mt-5 d-inline-block" style="width: 200px;">
+                            <strong>For {{ company.name }}</strong><br>
+                            <small class="text-muted">Authorized Signatory</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

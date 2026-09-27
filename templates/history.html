@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Quotations</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+    <style>
+        /* Quotation cards */
+        .qt-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px; transition: all 0.2s; cursor: grab; }
+        .qt-card:hover { background: rgba(57,73,171,0.1); border-color: rgba(57,73,171,0.3); transform: translateY(-2px); }
+        .qt-card:active { cursor: grabbing; }
+        .qt-card.dragging { opacity: 0.5; border: 2px dashed #7c9dff; }
+
+        /* Compare drop zones */
+        .compare-zone { min-height: 120px; border: 2px dashed rgba(255,255,255,0.15); border-radius: 10px; padding: 14px; transition: all 0.3s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .compare-zone.drag-over { border-color: #7c9dff; background: rgba(57,73,171,0.1); box-shadow: 0 0 20px rgba(57,73,171,0.2); }
+        .compare-zone.has-item { border-style: solid; border-color: rgba(57,73,171,0.3); justify-content: flex-start; align-items: stretch; }
+        .compare-zone .drop-hint { color: #666; text-align: center; }
+        .compare-zone .drop-hint i { font-size: 1.5rem; display: block; margin-bottom: 4px; }
+
+        /* Compare table */
+        .compare-table { width: 100%; font-size: 0.75rem; }
+        .compare-table th { color: #888; font-size: 0.65rem; text-transform: uppercase; padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .compare-table td { padding: 4px 6px; color: #d0d0d0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .compare-table td.highlight-better { color: #81c784; font-weight: 700; }
+        .compare-table td.highlight-worse { color: #ef9a9a; }
+
+        /* PDF embed */
+        .pdf-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(46,125,50,0.15); border: 1px solid rgba(102,187,106,0.3); color: #81c784; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; text-decoration: none; }
+        .pdf-badge:hover { background: rgba(46,125,50,0.25); color: #a5d6a7; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-gear-wide-connected me-2 fs-4"></i>
+                <span class="fw-bold">{{ title }}</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/" class="btn btn-outline-light btn-sm"><i class="bi bi-house me-1"></i>Home</a>
+                <a href="/logout" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 mt-4">
+        <!-- Quotations List -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-collection me-2"></i>All Quotations</h6>
+                <input type="text" class="form-control form-control-sm" id="qtSearchInput" placeholder="Search..." style="width:200px;" oninput="filterQuotations()">
+            </div>
+            <div class="card-body p-0">
+                <div id="qtLoading" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div><p class="mt-2 text-muted small">Loading...</p></div>
+                <div id="qtEmpty" class="text-center py-4 d-none"><i class="bi bi-inbox display-4 text-muted"></i><p class="mt-2 text-muted">No quotations yet</p></div>
+                <div class="table-responsive" id="qtTableWrapper" style="display:none;">
+                    <table class="table table-hover mb-0 align-middle table-sm">
+                        <thead>
+                            <tr>
+                                <th>Quotation No.</th>
+                                <th>Inventory ID</th>
+                                <th>Manufacturer</th>
+                                <th>Model</th>
+                                <th class="text-end">Amount (₹)</th>
+                                <th>Date</th>
+                                <th>PDF</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="qtBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compare Section (same page, below quotations) -->
+        <div class="row g-3">
+            <!-- Left: Draggable quotation cards -->
+            <div class="col-lg-2">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header py-2"><h6 class="mb-0 small"><i class="bi bi-list-ul me-1"></i>Drag to Compare</h6></div>
+                    <div class="card-body p-2" id="compareList" style="max-height:300px; overflow-y:auto;">
+                        <p class="text-muted small text-center py-3">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Drop zones + comparison + 3D -->
+            <div class="col-lg-10">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-muted mb-0 small"><i class="bi bi-arrow-left-right me-2"></i>Drop quotations to compare</h6>
+                    <button class="btn btn-outline-danger btn-sm" style="font-size:0.7rem;" onclick="clearComparison()"><i class="bi bi-x-circle me-1"></i>Clear</button>
+                </div>
+                <div class="row g-2 mb-3" id="compareZones">
+                    <div class="col-md-6">
+                        <div class="compare-zone" id="zone1" style="min-height:120px;" ondragover="allowDrop(event)" ondrop="dropQuotation(event, 1)" ondragleave="leaveDrop(event)">
+                            <div class="drop-hint"><i class="bi bi-plus-circle-dotted"></i><small>Drop Quotation 1 here</small></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="compare-zone" id="zone2" style="min-height:120px;" ondragover="allowDrop(event)" ondrop="dropQuotation(event, 2)" ondragleave="leaveDrop(event)">
+                            <div class="drop-hint"><i class="bi bi-plus-circle-dotted"></i><small>Drop Quotation 2 here</small></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison Table + 3D side by side -->
+                <div class="row g-3 d-none" id="comparisonRow">
+                    <!-- Table on left -->
+                    <div class="col-lg-4">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header py-2"><h6 class="mb-0 small"><i class="bi bi-bar-chart me-2"></i>Parameters</h6></div>
+                            <div class="card-body p-0" style="max-height:500px; overflow-y:auto;">
+                                <table class="compare-table">
+                                    <thead><tr><th>Parameter</th><th id="compHead1">Q1</th><th id="compHead2">Q2</th></tr></thead>
+                                    <tbody id="compBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 3D Motor on right -->
+                    <div class="col-lg-8">
+                        <div class="card shadow-sm border-0" id="viz3dSection">
+                            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 small"><i class="bi bi-badge-3d me-2"></i>3D Motor Comparison</h6>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="toggleCutaway" onchange="toggleCutawayView()" checked>
+                                        <label class="form-check-label" style="font-size:0.7rem;color:#888;" for="toggleCutaway">Cutaway</label>
+                                    </div>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="toggleLabels" onchange="toggleAnnotations()" checked>
+                                        <label class="form-check-label" style="font-size:0.7rem;color:#888;" for="toggleLabels">Labels</label>
+                                    </div>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="toggleRotate" onchange="toggleAutoRotate()">
+                                        <label class="form-check-label" style="font-size:0.7rem;color:#888;" for="toggleRotate">Spin</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0" style="position:relative;">
+                                <div id="viz3dContainer" style="width:100%; height:480px; border-radius:0 0 12px 12px; overflow:hidden; background: linear-gradient(180deg, #080c16 0%, #121828 50%, #1a2040 100%);">
+                                </div>
+                                <!-- Motor labels overlay -->
+                                <div style="position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:30px;">
+                                    <span style="background:rgba(79,195,247,0.15); border:1px solid rgba(79,195,247,0.4); color:#4fc3f7; padding:3px 10px; border-radius:5px; font-size:0.7rem; font-weight:600;" id="motor1Title">Motor 1</span>
+                                    <span style="background:rgba(255,138,101,0.15); border:1px solid rgba(255,138,101,0.4); color:#ff8a65; padding:3px 10px; border-radius:5px; font-size:0.7rem; font-weight:600;" id="motor2Title">Motor 2</span>
+                                </div>
+                                <!-- Specs panel -->
+                                <div id="motorSpecsPanel" style="position:absolute; bottom:10px; left:10px; right:10px; display:flex; gap:8px; pointer-events:none;">
+                                    <div style="flex:1; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:1px solid rgba(79,195,247,0.2); border-radius:6px; padding:8px 10px;">
+                                        <div style="font-size:0.6rem; text-transform:uppercase; color:#4fc3f7; font-weight:700; margin-bottom:2px;" id="spec1Header">Motor 1</div>
+                                        <div id="spec1Body" style="font-size:0.65rem; color:#ccc; line-height:1.4;"></div>
+                                    </div>
+                                    <div style="flex:1; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:1px solid rgba(255,138,101,0.2); border-radius:6px; padding:8px 10px;">
+                                        <div style="font-size:0.6rem; text-transform:uppercase; color:#ff8a65; font-weight:700; margin-bottom:2px;" id="spec2Header">Motor 2</div>
+                                        <div id="spec2Body" style="font-size:0.65rem; color:#ccc; line-height:1.4;"></div>
+                                    </div>
+                                </div>
+                                <!-- Controls hint -->
+                                <div style="position:absolute; top:8px; right:12px; font-size:0.6rem; color:#444;">
+                                    <i class="bi bi-mouse me-1"></i>Drag · Scroll to zoom
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Delete Quotation</h6><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body"><p>Delete <strong id="deleteId"></strong>? This cannot be undone.</p></div>
+                <div class="modal-footer"><button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger btn-sm" onclick="confirmDelete()">Delete</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toastNotification" class="toast" role="alert">
+            <div class="toast-header"><i class="bi bi-info-circle me-2" id="toastIcon"></i><strong class="me-auto" id="toastTitle">Info</strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="/static/motor3d.js"></script>
+    <script>
+    let allQuotations = [];
+    let deleteTarget = null;
+    let compareData = { 1: null, 2: null };
+
+    document.addEventListener('DOMContentLoaded', loadQuotations);
+
+    // ============ QUOTATIONS TAB ============
+
+    async function loadQuotations() {
+        try {
+            const res = await fetch('/api/quotations');
+            const data = await res.json();
+            if (data.success) {
+                allQuotations = data.quotations;
+                renderQuotations(allQuotations);
+                renderCompareList(allQuotations);
+            }
+        } catch (e) { showToast('Error', e.message, 'danger'); }
+        document.getElementById('qtLoading').classList.add('d-none');
+    }
+
+    function renderQuotations(list) {
+        const tbody = document.getElementById('qtBody');
+        const wrapper = document.getElementById('qtTableWrapper');
+        const empty = document.getElementById('qtEmpty');
+
+        if (list.length === 0) { wrapper.style.display = 'none'; empty.classList.remove('d-none'); return; }
+        wrapper.style.display = 'block'; empty.classList.add('d-none');
+
+        tbody.innerHTML = list.map(q => `
+            <tr>
+                <td><strong style="color:#7c9dff;">${q.quotation_number}</strong></td>
+                <td><span class="badge" style="background:rgba(57,73,171,0.2);color:#9fa8da;">${q.inventory_id}</span></td>
+                <td>${q.manufacturer || 'N/A'}</td>
+                <td>${q.model || 'N/A'}</td>
+                <td class="text-end fw-bold" style="color:#81c784;">₹ ${Number(q.grand_total).toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                <td class="text-muted small">${q.created_date}</td>
+                <td><a href="/api/download/${q.quotation_number}" class="pdf-badge"><i class="bi bi-file-pdf"></i>PDF</a></td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <a href="/quotation/${q.quotation_number}" class="btn btn-outline-primary btn-sm" title="Preview"><i class="bi bi-eye"></i></a>
+                        <button class="btn btn-outline-danger btn-sm" title="Delete" onclick="showDelete('${q.quotation_number}')"><i class="bi bi-trash"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterQuotations() {
+        const q = document.getElementById('qtSearchInput').value.toLowerCase();
+        if (!q) { renderQuotations(allQuotations); return; }
+        renderQuotations(allQuotations.filter(x =>
+            (x.quotation_number||'').toLowerCase().includes(q) ||
+            (x.inventory_id||'').toLowerCase().includes(q) ||
+            (x.manufacturer||'').toLowerCase().includes(q)
+        ));
+    }
+
+    function showDelete(qtNum) {
+        deleteTarget = qtNum;
+        document.getElementById('deleteId').textContent = qtNum;
+        new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    }
+
+    async function confirmDelete() {
+        if (!deleteTarget) return;
+        try {
+            const res = await fetch(`/api/quotation/${deleteTarget}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) { showToast('Deleted', 'Quotation removed', 'success'); bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide(); loadQuotations(); }
+        } catch (e) { showToast('Error', e.message, 'danger'); }
+    }
+
+    // ============ COMPARE TAB ============
+
+    function renderCompareList(list) {
+        const container = document.getElementById('compareList');
+        if (list.length === 0) { container.innerHTML = '<p class="text-muted small text-center py-3">No quotations to compare</p>'; return; }
+
+        container.innerHTML = list.map(q => `
+            <div class="qt-card mb-2" draggable="true" ondragstart="dragStart(event, '${q.quotation_number}')" data-qt="${q.quotation_number}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="fw-bold" style="color:#7c9dff;">${q.quotation_number}</small><br>
+                        <small class="text-muted">${q.manufacturer || ''} ${q.model || ''}</small>
+                    </div>
+                    <small class="fw-bold" style="color:#81c784;">₹${Number(q.grand_total).toLocaleString('en-IN')}</small>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function dragStart(e, qtNum) {
+        e.dataTransfer.setData('text/plain', qtNum);
+        e.target.classList.add('dragging');
+        setTimeout(() => e.target.classList.remove('dragging'), 200);
+    }
+
+    function allowDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+
+    function leaveDrop(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+
+    async function dropQuotation(e, zoneNum) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const qtNum = e.dataTransfer.getData('text/plain');
+
+        // Fetch full quotation data
+        try {
+            const res = await fetch(`/api/quotation/${qtNum}`);
+            const data = await res.json();
+            if (data.success) {
+                compareData[zoneNum] = data.quotation;
+                renderDropZone(zoneNum, data.quotation);
+                if (compareData[1] && compareData[2]) renderComparison();
+            }
+        } catch (err) { showToast('Error', err.message, 'danger'); }
+    }
+
+    function renderDropZone(zoneNum, qt) {
+        const zone = document.getElementById('zone' + zoneNum);
+        zone.classList.add('has-item');
+        const cost = qt.cost_breakdown || {};
+        zone.innerHTML = `
+            <div class="w-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong style="color:#7c9dff;">${qt.quotation_number}</strong>
+                    <button class="btn btn-outline-danger btn-sm" style="padding:2px 6px;font-size:0.7rem;" onclick="removeFromZone(${zoneNum})"><i class="bi bi-x"></i></button>
+                </div>
+                <small class="text-muted d-block">${qt.inventory_id}</small>
+                <div class="mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+                    <div class="d-flex justify-content-between"><small class="text-muted">Manufacturer</small><small>${(qt.motor_details||{}).manufacturer || 'N/A'}</small></div>
+                    <div class="d-flex justify-content-between"><small class="text-muted">Power</small><small>${(qt.motor_details||{}).power || 'N/A'}</small></div>
+                    <div class="d-flex justify-content-between mt-2"><small class="text-muted">Subtotal</small><small>₹${Number(cost.subtotal||0).toLocaleString('en-IN')}</small></div>
+                    <div class="d-flex justify-content-between"><small class="text-muted">GST</small><small>₹${Number(cost.gst_amount||0).toLocaleString('en-IN')}</small></div>
+                    <div class="d-flex justify-content-between mt-1 pt-1" style="border-top:1px solid rgba(255,255,255,0.08);"><strong style="color:#81c784;">Total</strong><strong style="color:#81c784;">₹${Number(cost.grand_total||0).toLocaleString('en-IN')}</strong></div>
+                </div>
+            </div>
+        `;
+    }
+
+    function removeFromZone(zoneNum) {
+        compareData[zoneNum] = null;
+        const zone = document.getElementById('zone' + zoneNum);
+        zone.classList.remove('has-item');
+        zone.innerHTML = `<div class="drop-hint"><i class="bi bi-plus-circle-dotted"></i><small>Drop Quotation ${zoneNum} here</small></div>`;
+        document.getElementById('comparisonResult').classList.add('d-none');
+    }
+
+    function clearComparison() {
+        removeFromZone(1);
+        removeFromZone(2);
+        document.getElementById('comparisonRow').classList.add('d-none');
+    }
+
+    function renderComparison() {
+        const q1 = compareData[1], q2 = compareData[2];
+        const result = document.getElementById('comparisonRow');
+        result.classList.remove('d-none');
+
+        document.getElementById('compHead1').textContent = q1.quotation_number;
+        document.getElementById('compHead2').textContent = q2.quotation_number;
+
+        const eng1 = q1.engineering_details || {};
+        const eng2 = q2.engineering_details || {};
+        const cost1 = q1.cost_breakdown || {};
+        const cost2 = q2.cost_breakdown || {};
+        const motor1 = q1.motor_details || {};
+        const motor2 = q2.motor_details || {};
+
+        const rows = [
+            { label: 'Manufacturer', v1: motor1.manufacturer, v2: motor2.manufacturer },
+            { label: 'Power', v1: motor1.power, v2: motor2.power },
+            { label: 'Voltage', v1: motor1.voltage, v2: motor2.voltage },
+            { label: 'RPM', v1: motor1.rpm, v2: motor2.rpm },
+            { label: 'Copper Weight', v1: eng1.copper_weight_kg ? eng1.copper_weight_kg + ' Kg' : 'N/A', v2: eng2.copper_weight_kg ? eng2.copper_weight_kg + ' Kg' : 'N/A' },
+            { label: 'Coils', v1: eng1.number_of_coils, v2: eng2.number_of_coils },
+            { label: 'Wire Gauge', v1: eng1.wire_gauge, v2: eng2.wire_gauge },
+            { label: 'Oil Quantity', v1: eng1.oil_quantity_litres ? eng1.oil_quantity_litres + ' L' : 'N/A', v2: eng2.oil_quantity_litres ? eng2.oil_quantity_litres + ' L' : 'N/A' },
+            { label: 'Labour Hours', v1: eng1.labour_hours, v2: eng2.labour_hours },
+            { label: 'Subtotal', v1: '₹' + Number(cost1.subtotal||0).toLocaleString('en-IN'), v2: '₹' + Number(cost2.subtotal||0).toLocaleString('en-IN'), compare: true, n1: cost1.subtotal, n2: cost2.subtotal },
+            { label: 'GST', v1: '₹' + Number(cost1.gst_amount||0).toLocaleString('en-IN'), v2: '₹' + Number(cost2.gst_amount||0).toLocaleString('en-IN') },
+            { label: 'Grand Total', v1: '₹' + Number(cost1.grand_total||0).toLocaleString('en-IN'), v2: '₹' + Number(cost2.grand_total||0).toLocaleString('en-IN'), compare: true, n1: cost1.grand_total, n2: cost2.grand_total },
+            { label: 'Confidence', v1: eng1.overall_confidence ? eng1.overall_confidence + '%' : 'N/A', v2: eng2.overall_confidence ? eng2.overall_confidence + '%' : 'N/A' },
+        ];
+
+        document.getElementById('compBody').innerHTML = rows.map(r => {
+            let cls1 = '', cls2 = '';
+            if (r.compare && r.n1 != null && r.n2 != null) {
+                if (r.n1 < r.n2) { cls1 = 'highlight-better'; cls2 = 'highlight-worse'; }
+                else if (r.n2 < r.n1) { cls2 = 'highlight-better'; cls1 = 'highlight-worse'; }
+            }
+            return `<tr><td>${r.label}</td><td class="${cls1}">${r.v1 || 'N/A'}</td><td class="${cls2}">${r.v2 || 'N/A'}</td></tr>`;
+        }).join('');
+
+        // Render 3D visualization below the table
+        render3DVisualization();
+    }
+
+    // ============ UTILS ============
+    function showToast(title, msg, type) {
+        document.getElementById('toastTitle').textContent = title;
+        document.getElementById('toastMessage').textContent = msg;
+        const icon = document.getElementById('toastIcon');
+        icon.className = 'bi me-2 ' + (type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-circle-fill text-danger');
+        new bootstrap.Toast(document.getElementById('toastNotification'), { delay: 3000 }).show();
+    }
+    </script>
+</body>
+</html>
