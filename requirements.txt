@@ -11,3 +11,4 @@ requests==2.32.3
 python-dotenv==1.0.1
 aiofiles==24.1.0
 neo4j==5.26.0
+itsdangerous==2.2.0
